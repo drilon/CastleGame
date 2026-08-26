@@ -1,0 +1,17 @@
+[
+  {
+    "id": "foothills",
+    "theme": "The Foothills",
+    "levelCount": 15
+  },
+  {
+    "id": "riverlands",
+    "theme": "The Riverlands",
+    "levelCount": 15
+  },
+  {
+    "id": "highlands",
+    "theme": "The Highlands",
+    "levelCount": 15
+  }
+]
