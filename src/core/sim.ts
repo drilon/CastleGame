@@ -13,8 +13,11 @@ import { poseOf, type RenderSnapshot } from './snapshot';
 export const FIXED_DT = 1 / 240;
 
 /** Where the machine stands. The castle grammar builds from x=0 rightward,
- * so this is also the standoff distance the trebuchet is tuned against. */
-export const TREBUCHET_ORIGIN = { x: -7, y: 6.5 };
+ * so with the castle spanning roughly 0..6m this puts it 13-19m downrange:
+ * a proper siege standoff rather than point-blank, while still sitting in
+ * the middle of the rig's reachable band (peak throw ~19.5m). Push it much
+ * further out and most release timings fall short of the walls. */
+export const TREBUCHET_ORIGIN = { x: -13, y: 9 };
 
 export interface SimOptions {
   gravity?: { x: number; y: number };
@@ -152,6 +155,12 @@ export class Sim {
         sling: this.rig.releaseJoint ? [this.slingSegmentPose()] : [],
         payload: poseOf(this.rig.payload),
         phase: this.rig.phase,
+        pivot: this.rig.pivot,
+        armLength: this.rig.longArm + this.rig.shortArm,
+        armThickness: this.rig.armThickness,
+        longArm: this.rig.longArm,
+        shortArm: this.rig.shortArm,
+        counterweightSize: this.rig.counterweightSize,
       },
     };
   }

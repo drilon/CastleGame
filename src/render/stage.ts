@@ -48,12 +48,37 @@ export async function createStage(mount: HTMLElement, atlas: Atlas): Promise<Sta
   const personSprites = new Map<string, Sprite>();
   const slingSprites: Sprite[] = [];
 
+  // The frame is decorative (the physics base has no collider — a column in
+  // the swing path would make the machine shoot itself), but without it the
+  // beam appears to float and reads as nothing like a trebuchet.
+  const frameLeft = makeSprite(atlas, textureKeyForTrebuchetPart('frame'));
+  const frameRight = makeSprite(atlas, textureKeyForTrebuchetPart('frame'));
+  const frameBrace = makeSprite(atlas, textureKeyForTrebuchetPart('frame'));
   const arm = makeSprite(atlas, textureKeyForTrebuchetPart('arm'));
   const counterweight = makeSprite(atlas, textureKeyForTrebuchetPart('counterweight'));
   const payload = makeSprite(atlas, TEXTURE_KEY_PROJECTILE);
-  counterweight.width = counterweight.height = 0.9;
-  payload.width = payload.height = 0.6;
-  trebuchetLayer.addChild(arm, counterweight, payload);
+  trebuchetLayer.addChild(frameLeft, frameRight, frameBrace, arm, counterweight, payload);
+  let frameBuilt = false;
+
+  /** Two splayed legs meeting at the pivot, plus a low cross-brace. */
+  function buildFrame(t: RenderSnapshot['trebuchet']): void {
+    if (frameBuilt) return;
+    frameBuilt = true;
+    const spread = t.pivot.y * 0.42;
+    const legLen = Math.hypot(spread, t.pivot.y);
+    const legThickness = Math.max(t.armThickness * 0.9, 0.12);
+    for (const [sprite, side] of [[frameLeft, -1], [frameRight, 1]] as const) {
+      sprite.width = legLen;
+      sprite.height = legThickness;
+      sprite.position.set(t.pivot.x + (side * spread) / 2, t.pivot.y / 2);
+      // Leg runs from its foot on the ground up to the pivot.
+      sprite.rotation = Math.atan2(t.pivot.y, -side * spread);
+    }
+    frameBrace.width = spread * 2;
+    frameBrace.height = legThickness * 0.8;
+    frameBrace.position.set(t.pivot.x, t.pivot.y * 0.28);
+    frameBrace.rotation = 0;
+  }
 
   function syncBlocks(snapshot: RenderSnapshot): void {
     const seen = new Set<string>();
@@ -100,20 +125,30 @@ export async function createStage(mount: HTMLElement, atlas: Atlas): Promise<Sta
 
   function syncTrebuchet(snapshot: RenderSnapshot): void {
     const t = snapshot.trebuchet;
-    arm.width = 2;
-    arm.height = 0.22;
-    arm.position.set(t.arm.x, t.arm.y);
+    buildFrame(t);
+
+    // The beam's local origin is the pivot, but it spans -shortArm..+longArm,
+    // so its visual centre is offset along its own axis.
+    arm.width = t.armLength;
+    arm.height = t.armThickness;
+    const beamOffset = (t.longArm - t.shortArm) / 2;
+    arm.position.set(
+      t.arm.x + Math.cos(t.arm.angle) * beamOffset,
+      t.arm.y + Math.sin(t.arm.angle) * beamOffset,
+    );
     arm.rotation = t.arm.angle;
 
+    counterweight.width = counterweight.height = t.counterweightSize;
     counterweight.position.set(t.counterweight.x, t.counterweight.y);
     counterweight.rotation = t.counterweight.angle;
 
+    payload.width = payload.height = t.armLength * 0.09;
     payload.position.set(t.payload.x, t.payload.y);
     payload.rotation = t.payload.angle;
 
     while (slingSprites.length < t.sling.length) {
       const s = makeSprite(atlas, textureKeyForTrebuchetPart('sling'));
-      s.height = 0.06;
+      s.height = 0.05;
       trebuchetLayer.addChild(s);
       slingSprites.push(s);
     }

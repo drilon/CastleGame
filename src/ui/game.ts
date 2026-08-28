@@ -22,6 +22,9 @@ type ShotPhase = 'ready' | 'swinging' | 'flight' | 'over';
 
 const REST_SPEED = 0.08;
 const REST_GRACE_TICKS = 90;
+/** Hard cap on a shot. Whatever the projectile is still doing, the turn is
+ * over — without this a single stray body can strand the player forever. */
+const MAX_FLIGHT_TICKS = 240 * 7;
 
 export async function mountGame(root: HTMLElement, RAPIER: RapierModule, atlas: Atlas, level: Level, options: GameOptions): Promise<GameHandle> {
   root.innerHTML = '';
@@ -36,7 +39,8 @@ export async function mountGame(root: HTMLElement, RAPIER: RapierModule, atlas: 
       <div class="stat-label">Ammo</div>
       <div class="stat-value" data-hud="ammo"></div>
     </div>
-    <div>
+    <div style="display:flex; gap:0.5rem;">
+      <button class="btn secondary" data-action="restart">Retry</button>
       <button class="btn secondary" data-action="exit">Menu</button>
     </div>
     <div>
@@ -60,7 +64,7 @@ export async function mountGame(root: HTMLElement, RAPIER: RapierModule, atlas: 
   const stage = await createStage(canvasMount, atlas);
   const bounds = levelBounds(level);
 
-  let sim = new Sim(RAPIER, level, { maxTicks: 240 * 60 });
+  let sim = new Sim(RAPIER, level, { maxTicks: 240 * 3600 });
   let prevSnapshot: RenderSnapshot = sim.snapshot();
   let currSnapshot: RenderSnapshot = sim.snapshot();
   let phase: ShotPhase = 'ready';
@@ -82,17 +86,24 @@ export async function mountGame(root: HTMLElement, RAPIER: RapierModule, atlas: 
     banner.classList.add('visible');
   }
 
-  function maxBodySpeed(): number {
+  /** "Has the dust settled" is about the CASTLE, deliberately not the
+   * projectile. A ball that misses keeps rolling across flat ground almost
+   * indefinitely (rolling contact generates no sliding friction), and
+   * including it here is what previously left the player stuck on one shot
+   * forever. */
+  function castleAtRest(): boolean {
     let max = 0;
     for (const b of sim.world.blocks) {
       const v = b.body.linvel();
       const s = Math.hypot(v.x, v.y);
       if (s > max) max = s;
     }
-    const pv = sim.rig.payload.linvel();
-    const ps = Math.hypot(pv.x, pv.y);
-    if (ps > max) max = ps;
-    return max;
+    for (const p of sim.world.people) {
+      const v = p.body.linvel();
+      const s = Math.hypot(v.x, v.y);
+      if (s > max) max = s;
+    }
+    return max < REST_SPEED;
   }
 
   function onSettled(): void {
@@ -127,15 +138,18 @@ export async function mountGame(root: HTMLElement, RAPIER: RapierModule, atlas: 
   canvasMount.addEventListener('pointerdown', handleClick);
   hud.querySelector('[data-action="exit"]')!.addEventListener('click', options.onExit);
   banner.querySelector('[data-action="exit2"]')!.addEventListener('click', options.onExit);
-  banner.querySelector('[data-action="retry"]')!.addEventListener('click', () => {
+  function restart(): void {
     banner.classList.remove('visible');
-    sim = new Sim(RAPIER, level, { maxTicks: 240 * 60 });
+    sim = new Sim(RAPIER, level, { maxTicks: 240 * 3600 });
     prevSnapshot = sim.snapshot();
     currSnapshot = sim.snapshot();
     phase = 'ready';
     ammoLeft = level.ammo;
     shotsUsed = 0;
-  });
+    ticksSinceRelease = 0;
+  }
+  banner.querySelector('[data-action="retry"]')!.addEventListener('click', restart);
+  hud.querySelector('[data-action="restart"]')!.addEventListener('click', restart);
 
   let lastTime = performance.now();
   function frame(now: number): void {
@@ -153,7 +167,8 @@ export async function mountGame(root: HTMLElement, RAPIER: RapierModule, atlas: 
 
       if (phase === 'flight') {
         ticksSinceRelease += sim.tick - tickBefore;
-        if (ticksSinceRelease > REST_GRACE_TICKS && (maxBodySpeed() < REST_SPEED || sim.allDead)) {
+        const settled = ticksSinceRelease > REST_GRACE_TICKS && castleAtRest();
+        if (sim.allDead || settled || ticksSinceRelease > MAX_FLIGHT_TICKS) {
           onSettled();
         }
       }

@@ -35,8 +35,8 @@ export function buildDailyLevel(RAPIER: RapierModule, date: Date, maxAttempts = 
     }
     const evaluation = evaluateLevel(RAPIER, level, {
       releaseDelays: abbreviatedDelays(),
-      massMultipliers: [0.8, 1, 1.3],
-      maxTicksPerShot: 240 * 3,
+      massMultipliers: [1],
+      maxTicksPerShot: 240 * 4,
       maxShots: 2,
     });
     if (!evaluation.solvable) continue;
@@ -49,6 +49,6 @@ export function buildDailyLevel(RAPIER: RapierModule, date: Date, maxAttempts = 
 
 function abbreviatedDelays(): number[] {
   const out: number[] = [];
-  for (let t = 20; t <= 140; t += 6) out.push(t);
+  for (let t = 120; t <= 260; t += 10) out.push(t);
   return out;
 }

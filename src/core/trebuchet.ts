@@ -5,8 +5,15 @@ import { trebuchetId } from './entities';
 
 export type TrebuchetPhase = 'cocked' | 'swinging' | 'released';
 
-const ARM_THICKNESS = 0.22;
-const COUNTERWEIGHT_SIZE = 0.9;
+/** Beam thickness and counterweight box size scale with the machine so a
+ * 10m trebuchet doesn't render as a hairline with a pebble on the end. */
+const ARM_THICKNESS_RATIO = 0.045;
+const COUNTERWEIGHT_SIZE_RATIO = 0.16;
+/** The counterweight hangs from a short link below the beam tip, as on a
+ * real pivoting-counterweight trebuchet, rather than being pinned rigidly
+ * through its own centre. The extra degree of freedom is also what gives
+ * the swing its characteristic secondary lurch. */
+const COUNTERWEIGHT_LINK_RATIO = 0.09;
 /**
  * Angle of the long arm at rest, measured from +x (downrange).
  *
@@ -32,6 +39,8 @@ export interface TrebuchetRig {
   shortArm: number;
   longArm: number;
   slingLength: number;
+  armThickness: number;
+  counterweightSize: number;
   pivot: { x: number; y: number };
 }
 
@@ -46,6 +55,9 @@ export function slingAnchorWorld(rig: TrebuchetRig): { x: number; y: number } {
 export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config: TrebuchetConfig): TrebuchetRig {
   const shortArm = config.armLength / (1 + config.armRatio);
   const longArm = shortArm * config.armRatio;
+  const armThickness = config.armLength * ARM_THICKNESS_RATIO;
+  const cwSize = config.armLength * COUNTERWEIGHT_SIZE_RATIO;
+  const cwLink = config.armLength * COUNTERWEIGHT_LINK_RATIO;
   const pivot = { x: config.x, y: config.y };
   const dir = { x: Math.cos(COCK_ANGLE), y: Math.sin(COCK_ANGLE) };
 
@@ -64,9 +76,9 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
       .setLinearDamping(0.05),
   );
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid((longArm + shortArm) / 2, ARM_THICKNESS / 2)
+    RAPIER.ColliderDesc.cuboid((longArm + shortArm) / 2, armThickness / 2)
       .setTranslation((longArm - shortArm) / 2, 0)
-      .setDensity(7.8)
+      .setMass(config.armMass)
       .setFriction(0.3)
       // The arm must not collide with the castle or the payload; it is a
       // mechanism, not a weapon.
@@ -79,12 +91,12 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
   const shortTip = { x: pivot.x - shortArm * dir.x, y: pivot.y - shortArm * dir.y };
   const counterweight = world.createRigidBody(
     RAPIER.RigidBodyDesc.kinematicPositionBased()
-      .setTranslation(shortTip.x, shortTip.y)
+      .setTranslation(shortTip.x, shortTip.y - cwLink - cwSize / 2)
       .setAngularDamping(0.3)
       .setLinearDamping(0.05),
   );
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(COUNTERWEIGHT_SIZE / 2, COUNTERWEIGHT_SIZE / 2)
+    RAPIER.ColliderDesc.cuboid(cwSize / 2, cwSize / 2)
       .setDensity(1)
       .setMass(config.counterweightMass)
       .setFriction(0.5)
@@ -92,7 +104,7 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
     counterweight,
   );
   world.createImpulseJoint(
-    RAPIER.JointData.revolute({ x: -shortArm, y: 0 }, { x: 0, y: 0 }),
+    RAPIER.JointData.revolute({ x: -shortArm, y: 0 }, { x: 0, y: cwLink + cwSize / 2 }),
     arm,
     counterweight,
     true,
@@ -120,7 +132,10 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
     RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(payloadStart.x, payloadStart.y)
       .setCcdEnabled(true)
-      .setLinearDamping(0.01),
+      .setLinearDamping(0.15)
+      // Rolling contact produces no sliding friction, so without angular
+      // damping a missed shot rolls downrange essentially forever.
+      .setAngularDamping(1.2),
   );
   const payloadCollider = world.createCollider(
     RAPIER.ColliderDesc.ball(config.payloadRadius)
@@ -148,6 +163,8 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
     shortArm,
     longArm,
     slingLength,
+    armThickness,
+    counterweightSize: cwSize,
     pivot,
   };
 }

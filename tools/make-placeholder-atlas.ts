@@ -30,6 +30,7 @@ const cells: Cell[] = [
   { key: 'person:dead', color: 0x6b6b6b, label: 'X', shape: 'circle' },
   { key: 'projectile', color: 0x2b2b2b, label: 'O', shape: 'circle' },
   { key: 'treb:base', color: 0x5a4632, label: 'B', shape: 'rect' },
+  { key: 'treb:frame', color: 0x3f2f21, label: 'F', shape: 'rect' },
   { key: 'treb:arm', color: 0x7a5c3e, label: 'A', shape: 'rect' },
   { key: 'treb:counterweight', color: 0x3a3a3a, label: 'W', shape: 'rect' },
   { key: 'treb:sling', color: 0x2f2f2f, label: 'S', shape: 'rect' },

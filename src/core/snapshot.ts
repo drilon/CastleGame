@@ -16,6 +16,15 @@ export interface RenderSnapshot {
     sling: (BodyPose & { length: number })[];
     payload: BodyPose;
     phase: string;
+    /** Static geometry of the machine, so the renderer can draw a real
+     * frame (A-frame legs, beam, counterweight box) at the right scale
+     * instead of guessing. */
+    pivot: { x: number; y: number };
+    armLength: number;
+    armThickness: number;
+    longArm: number;
+    shortArm: number;
+    counterweightSize: number;
   };
 }
 

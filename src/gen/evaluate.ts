@@ -20,9 +20,9 @@ export interface SweepConfig {
 
 export function defaultSweepConfig(maxShots: number): SweepConfig {
   const releaseDelays: number[] = [];
-  // The tuned rig's usable window sits around ticks 44-80; sample it
-  // densely and the surrounding range coarsely.
-  for (let t = 30; t <= 100; t += 4) releaseDelays.push(t);
+  // The tuned rig swings for ~0.8s, so its usable window sits around ticks
+  // 170-220. Sample generously either side of that.
+  for (let t = 120; t <= 260; t += 6) releaseDelays.push(t);
   return {
     releaseDelays,
     // Release timing is the ONLY thing the player controls at the moment of
@@ -30,7 +30,7 @@ export function defaultSweepConfig(maxShots: number): SweepConfig {
     // control. Sweeping it would credit the player with agency they do not
     // have and overstate how solvable a level is.
     massMultipliers: [1],
-    maxTicksPerShot: 240 * 2,
+    maxTicksPerShot: 240 * 4,
     maxShots: Math.min(maxShots, 2),
     beamWidth: 3,
   };

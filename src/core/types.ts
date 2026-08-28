@@ -35,6 +35,12 @@ export interface TrebuchetConfig {
   /** Ratio of long arm length to short arm length. */
   armRatio: number;
   armLength: number;
+  /** Mass of the beam itself. This is the main brake on how violently the
+   * machine swings: a real trebuchet is slow and stately because its beam
+   * carries enormous rotational inertia against the counterweight's torque.
+   * Leaving the beam near-weightless (as an early version did) produces a
+   * whip-crack swing that is over before the player can read it. */
+  armMass: number;
   slingLength: number;
   slingSegments: number;
   payloadRadius: number;
@@ -42,29 +48,33 @@ export interface TrebuchetConfig {
 }
 
 /**
- * Tuned by sweeping release timing and measuring where the shot first comes
- * back down (see the git history for the harness). This rig gives a ~28-tick
- * window whose impact point rises smoothly from 0m to ~11m and back:
+ * Tuned by sweeping release timing and measuring throw distance from the
+ * machine (see git history for the harness). Measured curve:
  *
- *   tick  48  52  56  60  64  68  72
- *   land   0   3   5   8  10  11   7
+ *   tick  176  184  192  196  204  212  216
+ *   dist   10m  19m  23m  23m  20m  15m  13m
  *
- * At 240Hz that is ~117ms of usable window against roughly +-42ms of human
- * click precision, and the arc is monotonic on each side of the peak — so
- * "released a touch early" reads as "fell short" rather than as noise.
- * Keep that property if you retune: window width and monotonicity are the
- * whole feel of the game.
+ * Three properties matter and are easy to lose when retuning:
+ *  - SLOW: the beam takes ~0.8s to come round, so the swing is readable.
+ *    A near-weightless beam whip-cracks in 0.25s and feels broken.
+ *  - GENTLE GRADIENT: ~0.5m per tick near the peak, so small timing errors
+ *    cost metres, not tens of metres.
+ *  - MONOTONIC either side of the peak, so "early" reliably means "short".
+ *
+ * The beam is deliberately heavy relative to the counterweight (1000 vs
+ * 2500) — roughly a real trebuchet's proportions, and the reason the swing
+ * is stately rather than violent.
  */
 export const DEFAULT_TREBUCHET_CONFIG: Omit<TrebuchetConfig, 'x' | 'y'> = {
-  counterweightMass: 700,
-  armRatio: 4,
-  armLength: 5,
-  slingLength: 2.5,
+  counterweightMass: 2500,
+  armMass: 1000,
+  armRatio: 4.5,
+  armLength: 10,
+  slingLength: 4.5,
   slingSegments: 1,
-  payloadRadius: 0.3,
-  payloadMass: 40,
+  payloadRadius: 0.45,
+  payloadMass: 60,
 };
-
 /** A single input event applied to the simulation, timestamped in physics ticks. */
 export type SimInput =
   | { tick: number; type: 'dropCounterweight' }

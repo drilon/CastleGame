@@ -111,15 +111,16 @@ describe('impulse calibration', () => {
 
   it('fragments a struck castle locally instead of toppling it as one mass', () => {
     const level = simpleStackLevel();
-    const sim = new Sim(RAPIER, level, { maxTicks: 240 * 6 });
+    const sim = new Sim(RAPIER, level, { maxTicks: 240 * 12 });
     const totalJoints = sim.world.joints.length;
     expect(totalJoints).toBeGreaterThan(0);
 
-    // A release timing that connects with this fixture's stack.
+    // A release timing that connects with this fixture's stack (the rig
+    // swings for ~0.8s, so useful releases live around tick 180-220).
     sim.dropCounterweight();
-    for (let i = 0; i < 54; i++) sim.step();
+    for (let i = 0; i < 200; i++) sim.step();
     sim.releaseSling();
-    for (let i = 0; i < 240 * 4; i++) sim.step();
+    for (let i = 0; i < 240 * 6; i++) sim.step();
 
     const broken = sim.world.joints.filter((j) => j.broken).length;
     expect(broken).toBeGreaterThan(0);

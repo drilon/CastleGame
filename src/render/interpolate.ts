@@ -43,6 +43,12 @@ export function interpolateSnapshot(prev: RenderSnapshot, curr: RenderSnapshot, 
       }),
       payload: lerpPose(prev.trebuchet.payload, curr.trebuchet.payload, t),
       phase: curr.trebuchet.phase,
+      pivot: curr.trebuchet.pivot,
+      armLength: curr.trebuchet.armLength,
+      armThickness: curr.trebuchet.armThickness,
+      longArm: curr.trebuchet.longArm,
+      shortArm: curr.trebuchet.shortArm,
+      counterweightSize: curr.trebuchet.counterweightSize,
     },
   };
 }

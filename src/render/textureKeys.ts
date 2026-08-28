@@ -7,4 +7,6 @@ export const textureKeyForBlock = (material: MaterialId): string => `block:${mat
 export const textureKeyForPerson = (alive: boolean): string => (alive ? 'person:alive' : 'person:dead');
 export const TEXTURE_KEY_PROJECTILE = 'projectile';
 export const TEXTURE_KEY_GROUND = 'ground';
-export const textureKeyForTrebuchetPart = (part: 'base' | 'arm' | 'counterweight' | 'sling'): string => `treb:${part}`;
+export const textureKeyForTrebuchetPart = (
+  part: 'base' | 'frame' | 'arm' | 'counterweight' | 'sling',
+): string => `treb:${part}`;

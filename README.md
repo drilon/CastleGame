@@ -80,11 +80,27 @@ Three things about this rig are load-bearing and easy to break by accident:
   torque `-rₓmg`, so the weight must start *behind* the pivot to sweep the tip downrange. Cocking it the
   intuitive-looking other way throws over the back of the machine.
 
-The rig is tuned by sweeping release timing and measuring where the shot first returns to head height. The
-shipped configuration gives a ~28-tick window whose impact point rises smoothly from 0 m to ~11 m and back —
-about 117 ms against roughly ±42 ms of human click precision, monotonic on each side of the peak, so
-"released early" reads as "fell short" rather than as noise. **Window width and monotonicity are the whole
-feel of the game**; preserve them if you retune.
+The rig is tuned by sweeping release timing and measuring throw distance from the machine. The shipped
+configuration produces this curve (trebuchet at x=-13, castle spanning roughly x=0..6):
+
+| release tick | 184 | 188 | 192 | 196 | 200 | 204 | 208 | 212 | 216 | 220 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| impact x (m) | -0.2 | 3.1 | 5.1 | 6.2 | **6.4** | 5.8 | 4.7 | 3.4 | 1.9 | 0.3 |
+
+That is a ~36-tick (150 ms) window covering the castle footprint, monotonic either side of the peak, on a beam
+that takes ~0.8 s to come round. Apex height also rises across the window (0.8 m → 10 m), so a flat shot into
+the walls and a high lob onto the roof are both available — different releases are tactically different, not
+just "more or less far".
+
+Three properties are load-bearing. Preserve them if you retune:
+
+- **Slow.** The beam is deliberately heavy relative to the counterweight (1000 vs 2500 — roughly real
+  proportions). Rotational inertia is what makes a trebuchet stately; a near-weightless beam whip-cracks
+  through its arc in 0.25 s, which reads as broken rather than as skill.
+- **Gentle gradient.** ~0.5 m per tick near the peak, so a small timing error costs metres, not tens of metres.
+- **Standoff matched to reach.** The machine's peak throw is ~19.5 m, so the castle sits 13–19 m out. Pushed
+  further back, most release timings fall short of the walls and the level becomes unwinnable no matter how
+  well timed.
 
 ## Calibration: everything is measured, not assumed
 
