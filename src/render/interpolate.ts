@@ -39,7 +39,7 @@ export function interpolateSnapshot(prev: RenderSnapshot, curr: RenderSnapshot, 
       counterweight: lerpPose(prev.trebuchet.counterweight, curr.trebuchet.counterweight, t),
       sling: curr.trebuchet.sling.map((s, i) => {
         const p = prev.trebuchet.sling[i];
-        return p ? lerpPose(p, s, t) : s;
+        return p ? { ...s, ...lerpPose(p, s, t), length: lerp(p.length, s.length, t) } : s;
       }),
       payload: lerpPose(prev.trebuchet.payload, curr.trebuchet.payload, t),
       phase: curr.trebuchet.phase,

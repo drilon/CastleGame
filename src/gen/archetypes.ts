@@ -46,18 +46,10 @@ function tower(rng: Rng): Structure {
   const blocks: BlockSpec[] = [...left.blocks, ...right.blocks];
   const people: PersonSpec[] = [];
   const [px0, px1] = interiorSpan(0, gap, BLOCK_W / 2);
-  // Only the lowest floor gets occupants — a castle with people spread
-  // across every storey needs a multi-shot combinatorial search to verify,
-  // which is future work (see README); concentrating them keeps a single
-  // well-aimed shot capable of clearing the level.
-  for (const supportY of left.floorSupportYs.slice(0, 1)) {
+  for (const supportY of left.floorSupportYs) {
     const floor = platform(-0.4, gap + 0.4, supportY, FLOOR_THICKNESS, 'wood');
     blocks.push(...floor.blocks);
-    const count = randInt(rng, 1, 2);
-    people.push(...peopleOnFloor(px0, px1, floor.topY + STAND_OFFSET, count));
-  }
-  for (const supportY of left.floorSupportYs.slice(1)) {
-    blocks.push(...platform(-0.4, gap + 0.4, supportY, FLOOR_THICKNESS, 'wood').blocks);
+    people.push(...peopleOnFloor(px0, px1, floor.topY + STAND_OFFSET, randInt(rng, 1, 3)));
   }
   blocks.push(...platform(-0.6, gap + 0.6, left.topY, 0.3, 'wood').blocks);
   return { blocks, people };
@@ -76,14 +68,10 @@ function keep(rng: Rng): Structure {
   const blocks: BlockSpec[] = cols.flatMap((c) => c.blocks);
   const people: PersonSpec[] = [];
   const [px0, px1] = interiorSpan(BLOCK_W, gap, BLOCK_W / 2);
-  for (const supportY of cols[0]!.floorSupportYs.slice(0, 1)) {
+  for (const supportY of cols[0]!.floorSupportYs) {
     const floor = platform(BLOCK_W + 0.5 - 0.4, gap - 0.5 + 0.4, supportY, FLOOR_THICKNESS, 'wood');
     blocks.push(...floor.blocks);
-    const count = randInt(rng, 1, 2);
-    people.push(...peopleOnFloor(px0, px1, floor.topY + STAND_OFFSET, count));
-  }
-  for (const supportY of cols[0]!.floorSupportYs.slice(1)) {
-    blocks.push(...platform(BLOCK_W + 0.5 - 0.4, gap - 0.5 + 0.4, supportY, FLOOR_THICKNESS, 'wood').blocks);
+    people.push(...peopleOnFloor(px0, px1, floor.topY + STAND_OFFSET, randInt(rng, 1, 3)));
   }
   blocks.push(...platform(-0.6, gap + BLOCK_W + 0.6, cols[0]!.topY, 0.3, 'stone').blocks);
   return { blocks, people };
@@ -101,7 +89,7 @@ function bridge(rng: Rng): Structure {
   ];
   const deck = platform(-0.4, span + 0.4, supportHeight * BLOCK_H, 0.3, 'wood');
   blocks.push(...deck.blocks);
-  const count = randInt(rng, 2, 3);
+  const count = randInt(rng, 2, 4);
   const people = peopleOnFloor(0.3, span - 0.3, deck.topY + STAND_OFFSET, count);
   return { blocks, people };
 }
@@ -146,7 +134,7 @@ function hanging(rng: Rng): Structure {
   const strutX = reach - 0.4;
   blocks.push({ x: strutX, y: shelfSupportY / 2, w: 0.3, h: shelfSupportY, angle: 0, material: 'wood' });
   const [px0, px1] = interiorSpan(0, strutX, BLOCK_W / 2);
-  const people = peopleOnFloor(px0, px1, shelf.topY + STAND_OFFSET, randInt(rng, 1, 2));
+  const people = peopleOnFloor(px0, px1, shelf.topY + STAND_OFFSET, randInt(rng, 1, 3));
   return { blocks, people };
 }
 

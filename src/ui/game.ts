@@ -58,7 +58,7 @@ export async function mountGame(root: HTMLElement, RAPIER: RapierModule, atlas: 
   root.appendChild(banner);
 
   const stage = await createStage(canvasMount, atlas);
-  const bounds = levelBounds(level, -5);
+  const bounds = levelBounds(level);
 
   let sim = new Sim(RAPIER, level, { maxTicks: 240 * 60 });
   let prevSnapshot: RenderSnapshot = sim.snapshot();

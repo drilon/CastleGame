@@ -113,15 +113,17 @@ export async function createStage(mount: HTMLElement, atlas: Atlas): Promise<Sta
 
     while (slingSprites.length < t.sling.length) {
       const s = makeSprite(atlas, textureKeyForTrebuchetPart('sling'));
-      s.width = 1;
-      s.height = 0.08;
+      s.height = 0.06;
       trebuchetLayer.addChild(s);
       slingSprites.push(s);
     }
-    t.sling.forEach((segment, i) => {
-      const s = slingSprites[i]!;
+    slingSprites.forEach((s, i) => {
+      const segment = t.sling[i];
+      s.visible = segment !== undefined;
+      if (!segment) return;
       s.position.set(segment.x, segment.y);
       s.rotation = segment.angle;
+      s.width = segment.length;
     });
   }
 

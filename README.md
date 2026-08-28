@@ -65,20 +65,50 @@ places — flagging it here now rather than quietly hoping it doesn't bite.
 `src/core/trebuchet.ts` builds a real jointed rig: a fixed base, a revolute-jointed arm, a counterweight
 hanging freely off the short end, and a sling ending in the payload. Two clicks: the first un-freezes the arm
 and counterweight (they start `kinematicPositionBased`, i.e. cocked and motionless, and only become dynamic on
-the first click — that's what lets the player choose *when* the swing starts); the second removes the joint
-holding the payload to the sling, releasing it as a free CCD-enabled projectile. Release timing alone
-determines the arc, exactly as on a real trebuchet.
+the first click — that's what lets the player choose *when* the swing starts); the second releases the payload
+as a free CCD-enabled projectile. Release timing alone determines the arc.
 
-**Known limitation, called out per the brief's own instruction to flag rather than silently work around:**
-early prototyping used a 3-segment sling, which turned out to be chaotically sensitive to release timing —
-the landing point could swing by tens of metres for a 1-tick difference in release, badly defeating a headless
-grid-search validator. Dropping to a single sling segment (`DEFAULT_TREBUCHET_CONFIG.slingSegments`) cut that
-sensitivity a lot but not entirely; the arm–counterweight–sling–payload system is still a compound pendulum
-and some residual chaos remains. The generator currently compensates by keeping occupants concentrated (one
-floor, 1–2 people) rather than spread across a whole tall castle, and the validator repeats *one* shot up to
-`ammo` times rather than searching truly independent shots per volley — both are pragmatic scope cuts for this
-pass, not fundamental limits of the architecture. The natural next step, with visual feedback in hand, is
-either more joint damping/solver iterations or an actual multi-shot combinatorial search in `evaluateLevel`.
+Three things about this rig are load-bearing and easy to break by accident:
+
+- **The sling is a rope joint, not a jointed rigid link.** A rope can only pull. A rigid link can also push,
+  which makes arm+sling a double pendulum — the textbook chaotic system. With a rigid link the landing point
+  jumped tens of metres between adjacent release ticks, which is unplayable and unvalidatable.
+- **The base carries no collider.** In 2D a support column sits squarely in the payload's swing path and the
+  machine shoots itself. Real frames straddle the sling in the third dimension, which we don't have.
+- **The cocked angle points the long arm down and slightly *forward*.** The arm is a straight lever, so the tip
+  and counterweight are always on opposite sides of the pivot. Gravity on a counterweight at offset `r` gives
+  torque `-rₓmg`, so the weight must start *behind* the pivot to sweep the tip downrange. Cocking it the
+  intuitive-looking other way throws over the back of the machine.
+
+The rig is tuned by sweeping release timing and measuring where the shot first returns to head height. The
+shipped configuration gives a ~28-tick window whose impact point rises smoothly from 0 m to ~11 m and back —
+about 117 ms against roughly ±42 ms of human click precision, monotonic on each side of the peak, so
+"released early" reads as "fell short" rather than as noise. **Window width and monotonicity are the whole
+feel of the game**; preserve them if you retune.
+
+## Calibration: everything is measured, not assumed
+
+The single largest bug in the first pass was inventing physical constants in a vacuum. Break thresholds were
+set 20–50× above any impulse the simulation actually produces, so no joint could ever fail and castles toppled
+as one welded rigid body — the exact failure mode the design forbids.
+
+The impulse scale this simulation really produces, measured:
+
+| Regime | Peak per-tick impulse |
+| --- | --- |
+| A healthy structure settling | ~1 N·s |
+| Masonry falling a few metres | ~27 N·s |
+| A direct projectile strike | 64–91 N·s |
+
+Break thresholds (`src/core/materials.ts`) live inside that band, and `tests/physics.test.ts` asserts they stay
+there. If you add a material, measure — don't guess.
+
+The kill model has the same character. It thresholds on **velocity change, not impulse**: impulse scales with
+the victim's mass, and a person body here masses well under a kilogram, so an absolute newton-second threshold
+is physically unreachable no matter how hard they're hit. That's why an earlier absolute threshold left people
+standing unharmed inside collapsing towers. Δv is mass-independent and the better injury proxy. Idle settling
+peaks at 0.83 m/s against a threshold of 10 — a 12× margin, with zero spurious deaths measured across every
+archetype.
 
 ## Level format & generator
 
@@ -93,9 +123,20 @@ a 2-second headless settle pass (`src/gen/settle.ts`) before being accepted — 
 under its own weight beyond a (generous, joint-compliance-aware) tolerance is rejected and regenerated with a
 derived seed.
 
-`src/gen/evaluate.ts` sweeps a grid of (release timing, counterweight mass) shot parameters against a
-candidate level. Zero winning combinations → reject. Over half the grid winning on shot one → reject as
-trivial. The winning fraction, inverted, is the difficulty score.
+`src/gen/evaluate.ts` sweeps release timing against a candidate level. Zero winning timings → reject. Over
+half the grid winning on shot one → reject as trivial. The winning fraction, inverted, is the difficulty score.
+
+It sweeps **only release timing**, deliberately: that is the sole control the player has at the moment of a
+shot. Counterweight mass is a level-authoring knob, not an in-game control, so sweeping it would credit the
+player with agency they don't have and overstate solvability.
+
+Shots are searched as genuinely *independent* choices rather than one shot repeated. Every opening shot is
+scored on its own; the most damaging few are carried forward as a beam and extended with the full grid of
+follow-ups. This matters because a castle with occupants on several floors generally cannot be cleared by
+firing the same shot twice — the second shot has to go somewhere else. Rapier worlds can't be cheaply cloned,
+so each follow-up replays its opening from scratch; that cost is why the search is a narrow beam of two-shot
+sequences rather than an exhaustive product. A level that validates is solvable in two shots and ships with a
+spare round on top.
 
 ## Campaign & daily pipeline
 

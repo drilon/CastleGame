@@ -11,7 +11,9 @@ export interface RenderSnapshot {
   trebuchet: {
     arm: BodyPose;
     counterweight: BodyPose;
-    sling: BodyPose[];
+    /** Zero or one segment: the sling line from arm tip to payload, with
+     * its current length (it is a rope, so this varies with slack). */
+    sling: (BodyPose & { length: number })[];
     payload: BodyPose;
     phase: string;
   };

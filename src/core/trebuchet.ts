@@ -7,22 +7,40 @@ export type TrebuchetPhase = 'cocked' | 'swinging' | 'released';
 
 const ARM_THICKNESS = 0.22;
 const COUNTERWEIGHT_SIZE = 0.9;
-/** Radians below the +x axis the long arm starts at — mostly-down, slightly
- * forward, so the counterweight hangs high behind the pivot ready to fall. */
+/**
+ * Angle of the long arm at rest, measured from +x (downrange).
+ *
+ * The arm is a straight lever, so the tip and the counterweight are always
+ * on opposite sides of the pivot — which fixes the rotation sense. Gravity
+ * on a counterweight at offset r applies torque -r_x*m*g, so the weight
+ * must start BEHIND the pivot (-x) to drive the arm counter-clockwise and
+ * sweep the tip up and downrange. That means the tip itself starts down
+ * and slightly FORWARD. Cocking it down-and-back instead puts the weight
+ * in front, spins the arm the other way, and throws over the back of the
+ * machine.
+ */
 const COCK_ANGLE = -1.396; // -80deg
 
 export interface TrebuchetRig {
   base: RAPIER.RigidBody;
   arm: RAPIER.RigidBody;
   counterweight: RAPIER.RigidBody;
-  slingSegments: RAPIER.RigidBody[];
   payload: RAPIER.RigidBody;
   payloadCollider: RAPIER.Collider;
   releaseJoint: RAPIER.ImpulseJoint | null;
   phase: TrebuchetPhase;
   shortArm: number;
   longArm: number;
+  slingLength: number;
   pivot: { x: number; y: number };
+}
+
+/** World-space position of the long-arm tip, where the sling is attached.
+ * The renderer draws the sling as a line from here to the payload. */
+export function slingAnchorWorld(rig: TrebuchetRig): { x: number; y: number } {
+  const t = rig.arm.translation();
+  const r = rig.arm.rotation();
+  return { x: t.x + rig.longArm * Math.cos(r), y: t.y + rig.longArm * Math.sin(r) };
 }
 
 export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config: TrebuchetConfig): TrebuchetRig {
@@ -31,22 +49,28 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
   const pivot = { x: config.x, y: config.y };
   const dir = { x: Math.cos(COCK_ANGLE), y: Math.sin(COCK_ANGLE) };
 
+  // The base is the fixed anchor for the arm's revolute joint. It carries NO
+  // collider on purpose: in 2D a support column would sit squarely in the
+  // payload's swing path and the machine would shoot itself. Real frames
+  // straddle the sling in the third dimension, which we don't have.
   const base = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(pivot.x, pivot.y));
-  world.createCollider(RAPIER.ColliderDesc.cuboid(0.3, pivot.y / 2).setTranslation(0, -pivot.y / 2), base);
 
   // Arm spans [-shortArm, +longArm] along its local x axis; local origin is the pivot.
   const arm = world.createRigidBody(
     RAPIER.RigidBodyDesc.kinematicPositionBased()
       .setTranslation(pivot.x, pivot.y)
       .setRotation(COCK_ANGLE)
-      .setAngularDamping(0.15)
+      .setAngularDamping(0.08)
       .setLinearDamping(0.05),
   );
   world.createCollider(
     RAPIER.ColliderDesc.cuboid((longArm + shortArm) / 2, ARM_THICKNESS / 2)
       .setTranslation((longArm - shortArm) / 2, 0)
       .setDensity(7.8)
-      .setFriction(0.3),
+      .setFriction(0.3)
+      // The arm must not collide with the castle or the payload; it is a
+      // mechanism, not a weapon.
+      .setSensor(true),
     arm,
   );
   world.createImpulseJoint(RAPIER.JointData.revolute({ x: 0, y: 0 }, { x: 0, y: 0 }), base, arm, true);
@@ -63,7 +87,8 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
     RAPIER.ColliderDesc.cuboid(COUNTERWEIGHT_SIZE / 2, COUNTERWEIGHT_SIZE / 2)
       .setDensity(1)
       .setMass(config.counterweightMass)
-      .setFriction(0.5),
+      .setFriction(0.5)
+      .setSensor(true),
     counterweight,
   );
   world.createImpulseJoint(
@@ -73,55 +98,40 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
     true,
   );
 
-  // Sling: a short chain hanging straight down from the long-arm tip, ending
-  // in the payload. Segments are dynamic from t=0 (they just hang under the
-  // frozen arm until the player drops the counterweight) so the chain settles
-  // taut before the level is presented.
+  // Sling: a ROPE, not a rigid link. A rope only ever pulls, which is what
+  // makes the throw predictable; a jointed rigid link can also push, turning
+  // arm+sling into a double pendulum — the classic chaotic system, and the
+  // reason the old rig's landing point jumped tens of metres between
+  // adjacent release ticks.
   const longTip = { x: pivot.x + longArm * dir.x, y: pivot.y + longArm * dir.y };
-  // Guard against a config (short pivot, long sling) that would hang the
-  // payload below the ground plane at spawn.
-  const slingLength = Math.min(config.slingLength, Math.max(0.3, longTip.y - config.payloadRadius - 0.1));
-  const segLen = slingLength / config.slingSegments;
-  const segments: RAPIER.RigidBody[] = [];
-  let prevBody: RAPIER.RigidBody = arm;
-  let prevLocalAnchor = { x: longArm, y: 0 };
-  let cursorY = longTip.y;
-  for (let i = 0; i < config.slingSegments; i++) {
-    const segCenterY = cursorY - segLen / 2;
-    const seg = world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(longTip.x, segCenterY)
-        .setLinearDamping(0.4)
-        .setAngularDamping(0.6),
-    );
-    world.createCollider(RAPIER.ColliderDesc.capsule(segLen / 2 - 0.03, 0.04).setDensity(0.3).setFriction(0.2), seg);
-    const jointAnchorOnSeg = { x: 0, y: segLen / 2 };
-    const joint = world.createImpulseJoint(
-      RAPIER.JointData.revolute(prevLocalAnchor, jointAnchorOnSeg),
-      prevBody,
-      seg,
-      true,
-    );
-    joint.setContactsEnabled(false);
-    segments.push(seg);
-    prevBody = seg;
-    prevLocalAnchor = { x: 0, y: -segLen / 2 };
-    cursorY -= segLen;
-  }
+  const slingLength = Math.max(0.4, config.slingLength);
+
+  // Rest the payload on the ground, sling-length from the tip, trailing
+  // behind the machine — the pouch lying in the trough before the shot.
+  const groundY = config.payloadRadius;
+  const drop = longTip.y - groundY;
+  const back = slingLength > Math.abs(drop) ? Math.sqrt(slingLength * slingLength - drop * drop) : 0;
+  const payloadStart = {
+    x: longTip.x - back,
+    y: slingLength > Math.abs(drop) ? groundY : longTip.y - slingLength,
+  };
 
   const payload = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic()
-      .setTranslation(longTip.x, cursorY - config.payloadRadius)
+      .setTranslation(payloadStart.x, payloadStart.y)
       .setCcdEnabled(true)
-      .setLinearDamping(0.02),
+      .setLinearDamping(0.01),
   );
   const payloadCollider = world.createCollider(
-    RAPIER.ColliderDesc.ball(config.payloadRadius).setDensity(config.payloadMass / (Math.PI * config.payloadRadius ** 2)).setFriction(0.5).setRestitution(0.1),
+    RAPIER.ColliderDesc.ball(config.payloadRadius)
+      .setDensity(config.payloadMass / (Math.PI * config.payloadRadius ** 2))
+      .setFriction(0.4)
+      .setRestitution(0.1),
     payload,
   );
   const releaseJoint = world.createImpulseJoint(
-    RAPIER.JointData.revolute(prevLocalAnchor, { x: 0, y: config.payloadRadius }),
-    prevBody,
+    RAPIER.JointData.rope(slingLength, { x: longArm, y: 0 }, { x: 0, y: 0 }),
+    arm,
     payload,
     true,
   );
@@ -131,13 +141,13 @@ export function buildTrebuchet(RAPIER: RapierModule, world: RAPIER.World, config
     base,
     arm,
     counterweight,
-    slingSegments: segments,
     payload,
     payloadCollider,
     releaseJoint,
     phase: 'cocked',
     shortArm,
     longArm,
+    slingLength,
     pivot,
   };
 }

@@ -41,20 +41,28 @@ export interface TrebuchetConfig {
   payloadMass: number;
 }
 
+/**
+ * Tuned by sweeping release timing and measuring where the shot first comes
+ * back down (see the git history for the harness). This rig gives a ~28-tick
+ * window whose impact point rises smoothly from 0m to ~11m and back:
+ *
+ *   tick  48  52  56  60  64  68  72
+ *   land   0   3   5   8  10  11   7
+ *
+ * At 240Hz that is ~117ms of usable window against roughly +-42ms of human
+ * click precision, and the arc is monotonic on each side of the peak — so
+ * "released a touch early" reads as "fell short" rather than as noise.
+ * Keep that property if you retune: window width and monotonicity are the
+ * whole feel of the game.
+ */
 export const DEFAULT_TREBUCHET_CONFIG: Omit<TrebuchetConfig, 'x' | 'y'> = {
-  counterweightMass: 450,
-  armRatio: 3,
-  armLength: 3.2,
-  slingLength: 1.7,
-  // A single link, not several: a multi-link sling chain turns out to whip
-  // chaotically (its landing point is wildly, unpredictably sensitive to
-  // release timing, to the point that a headless parameter sweep can't
-  // find a reliable window). One link keeps the "sling" character while
-  // making the release timing → landing spot relationship something a
-  // player — and a grid search — can actually learn.
+  counterweightMass: 700,
+  armRatio: 4,
+  armLength: 5,
+  slingLength: 2.5,
   slingSegments: 1,
   payloadRadius: 0.3,
-  payloadMass: 60,
+  payloadMass: 40,
 };
 
 /** A single input event applied to the simulation, timestamped in physics ticks. */

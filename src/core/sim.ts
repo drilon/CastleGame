@@ -3,7 +3,7 @@ import type { RapierModule } from './rapier-init';
 import type { Level, TrebuchetConfig } from './types';
 import { DEFAULT_TREBUCHET_CONFIG } from './types';
 import { buildWorld, type SimWorld } from './world';
-import { buildTrebuchet, dropCounterweight, releaseSling, type TrebuchetRig } from './trebuchet';
+import { buildTrebuchet, dropCounterweight, releaseSling, slingAnchorWorld, type TrebuchetRig } from './trebuchet';
 import { armPersonColliders, applyKillModel } from './kill';
 import { breakOverstressedJoints, snapshotBlockVelocities } from './breakable';
 import { poseOf, type RenderSnapshot } from './snapshot';
@@ -11,6 +11,10 @@ import { poseOf, type RenderSnapshot } from './snapshot';
 /** Fixed physics step. Everything gameplay-relevant (release timing, impulse
  * thresholds) is tuned against this — never vary it at runtime. */
 export const FIXED_DT = 1 / 240;
+
+/** Where the machine stands. The castle grammar builds from x=0 rightward,
+ * so this is also the standoff distance the trebuchet is tuned against. */
+export const TREBUCHET_ORIGIN = { x: -7, y: 6.5 };
 
 export interface SimOptions {
   gravity?: { x: number; y: number };
@@ -41,8 +45,8 @@ export class Sim {
     this.world = buildWorld(RAPIER, level, this.gravity);
     armPersonColliders(RAPIER, this.world);
     this.trebConfig = {
-      x: -5,
-      y: 5,
+      x: TREBUCHET_ORIGIN.x,
+      y: TREBUCHET_ORIGIN.y,
       ...DEFAULT_TREBUCHET_CONFIG,
       ...options.trebuchet,
     };
@@ -64,7 +68,7 @@ export class Sim {
    * who hasn't run out of shots). The castle and everyone in it carry over
    * untouched. */
   reloadTrebuchet(overrides: Partial<TrebuchetConfig> = {}): void {
-    const bodies = [this.rig.base, this.rig.arm, this.rig.counterweight, ...this.rig.slingSegments, this.rig.payload];
+    const bodies = [this.rig.base, this.rig.arm, this.rig.counterweight, this.rig.payload];
     for (const body of bodies) this.world.world.removeRigidBody(body);
     Object.assign(this.trebConfig, overrides);
     this.rig = buildTrebuchet(this.RAPIER, this.world.world, this.trebConfig);
@@ -115,6 +119,18 @@ export class Sim {
     return this.world.people.filter((p) => p.alive).length;
   }
 
+  /** Midpoint/orientation of the taut-or-slack sling line, for rendering. */
+  private slingSegmentPose(): { x: number; y: number; angle: number; length: number } {
+    const a = slingAnchorWorld(this.rig);
+    const b = this.rig.payload.translation();
+    return {
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2,
+      angle: Math.atan2(b.y - a.y, b.x - a.x),
+      length: Math.hypot(b.x - a.x, b.y - a.y),
+    };
+  }
+
   snapshot(): RenderSnapshot {
     return {
       tick: this.tick,
@@ -130,7 +146,10 @@ export class Sim {
       trebuchet: {
         arm: poseOf(this.rig.arm),
         counterweight: poseOf(this.rig.counterweight),
-        sling: this.rig.slingSegments.map((s) => poseOf(s)),
+        // The sling is a rope constraint, not a chain of bodies, so its
+        // visual is derived from its two endpoints. Once released there is
+        // no sling to draw.
+        sling: this.rig.releaseJoint ? [this.slingSegmentPose()] : [],
         payload: poseOf(this.rig.payload),
         phase: this.rig.phase,
       },
