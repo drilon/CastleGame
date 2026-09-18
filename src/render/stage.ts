@@ -13,9 +13,24 @@ export interface Stage {
   destroy(): void;
 }
 
+/**
+ * Every sprite lives under the world Container, which carries the y-flip
+ * that turns y-up physics into y-down screen space (see `fitCamera`). That
+ * flip also mirrors the artwork itself — the atlas's material letters came
+ * out upside down. So each sprite counter-flips on its own y axis: the two
+ * flips cancel for the texture (labels read upright) while the world flip
+ * still does its job on positions, and since rotation composes as
+ * diag(1,-1)*R(t)*diag(1,-1) = R(-t), the pair is a plain rotation — no
+ * mirroring, no sign change to undo anywhere else.
+ *
+ * Pixi's `width`/`height` setters preserve the sign of `scale`, so sizing a
+ * sprite later (blocks and sling segments are resized every frame) keeps
+ * the counter-flip.
+ */
 function makeSprite(atlas: Atlas, key: string): Sprite {
   const sprite = new Sprite(atlas.get(key));
   sprite.anchor.set(0.5);
+  sprite.scale.y = -Math.abs(sprite.scale.y);
   return sprite;
 }
 
@@ -33,7 +48,9 @@ export async function createStage(mount: HTMLElement, atlas: Atlas): Promise<Sta
   app.stage.addChild(world);
 
   const ground = makeSprite(atlas, TEXTURE_KEY_GROUND);
-  ground.anchor.set(0.5, 1);
+  // Counter-flipped like everything else, so its anchor edge flips too:
+  // anchor y=0 is what now hangs the slab *below* the horizon.
+  ground.anchor.set(0.5, 0);
   ground.width = 4000;
   ground.height = 40;
   ground.position.set(0, 0);

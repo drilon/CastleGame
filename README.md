@@ -80,27 +80,38 @@ Three things about this rig are load-bearing and easy to break by accident:
   torque `-rₓmg`, so the weight must start *behind* the pivot to sweep the tip downrange. Cocking it the
   intuitive-looking other way throws over the back of the machine.
 
-The rig is tuned by sweeping release timing and measuring throw distance from the machine. The shipped
-configuration produces this curve (trebuchet at x=-13, castle spanning roughly x=0..6):
+The rig is tuned by sweeping release timing and measuring throw distance from the machine (the sweep harness
+creates an empty level, steps a `Sim`, releases at each candidate tick and records where the payload first
+descends through y=1.5). The shipped configuration produces this curve (trebuchet at x=-10.3, castle blocks
+spanning roughly x=-0.6..5.8):
 
-| release tick | 184 | 188 | 192 | 196 | 200 | 204 | 208 | 212 | 216 | 220 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| impact x (m) | -0.2 | 3.1 | 5.1 | 6.2 | **6.4** | 5.8 | 4.7 | 3.4 | 1.9 | 0.3 |
+| release tick | 332 | 344 | 356 | 368 | 376 | 388 | 400 | 412 | 417 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| impact x (m) | 0.1 | 1.7 | 3.4 | 4.6 | **4.8** | 4.3 | 2.8 | 0.9 | 0.1 |
+| apex y (m) | 5.3 | 5.9 | 6.6 | 7.5 | 8.2 | 9.2 | 10.2 | 11.1 | 11.4 |
 
-That is a ~36-tick (150 ms) window covering the castle footprint, monotonic either side of the peak, on a beam
-that takes ~0.8 s to come round. Apex height also rises across the window (0.8 m → 10 m), so a flat shot into
-the walls and a high lob onto the roof are both available — different releases are tactically different, not
-just "more or less far".
+That is an **86-tick (358 ms) window** of consecutive release ticks landing inside the castle footprint,
+monotonic either side of the peak, on a beam that takes ~1.6 s to come round to peak range. Apex height rises
+across the window (5.3 m → 11.4 m), so a shallow shot into the walls and a high lob onto the roof are both
+available — different releases are tactically different, not just "more or less far".
 
 Three properties are load-bearing. Preserve them if you retune:
 
-- **Slow.** The beam is deliberately heavy relative to the counterweight (1000 vs 2500 — roughly real
+- **Slow.** The beam is deliberately heavy relative to the counterweight (1300 vs 4000 — roughly real
   proportions). Rotational inertia is what makes a trebuchet stately; a near-weightless beam whip-cracks
-  through its arc in 0.25 s, which reads as broken rather than as skill.
-- **Gentle gradient.** ~0.5 m per tick near the peak, so a small timing error costs metres, not tens of metres.
-- **Standoff matched to reach.** The machine's peak throw is ~19.5 m, so the castle sits 13–19 m out. Pushed
-  further back, most release timings fall short of the walls and the level becomes unwinnable no matter how
-  well timed.
+  through its arc in 0.25 s, which reads as broken rather than as skill. Slowness is also what *buys* the wide
+  release window: the landing point's curvature against release time falls roughly as the square of the beam's
+  angular rate, so slowing the swing by 1.7× widens the window by ~2.4×. The beam cannot go much heavier than
+  this — its own centre of mass sits forward of the pivot when cocked, and once `armMass·(longArm−shortArm)/2`
+  exceeds `counterweightMass·shortArm` the machine just rocks in place instead of coming round.
+- **Gentle gradient.** 0.17 m per tick at the window's steepest, so a small timing error costs decimetres, not
+  tens of metres.
+- **Standoff matched to reach.** The machine's peak throw is ~15.1 m from the pivot, so the castle sits 10–16 m
+  out. Reach and standoff are one tuning decision, not two: pushed further back, most release timings fall
+  short of the walls and the level becomes unwinnable no matter how well timed; pulled in, the far half of the
+  window overshoots the castle entirely. The rig is also close enough that the payload's own pre-release swing
+  passes *over* the near edge of the castle at ~6.5 m up — tall towers can be clipped by the still-slung
+  payload, which the validator sees too, since it runs the same physics.
 
 ## Calibration: everything is measured, not assumed
 
@@ -112,12 +123,14 @@ The impulse scale this simulation really produces, measured:
 
 | Regime | Peak per-tick impulse |
 | --- | --- |
-| A healthy structure settling | ~1 N·s |
+| A healthy structure settling | ~0.8 N·s |
 | Masonry falling a few metres | ~27 N·s |
-| A direct projectile strike | 64–91 N·s |
+| A direct projectile strike | 20–64 N·s |
 
 Break thresholds (`src/core/materials.ts`) live inside that band, and `tests/physics.test.ts` asserts they stay
-there. If you add a material, measure — don't guess.
+there. If you add a material, measure — don't guess. (The strike figure was re-measured after the trebuchet
+was retuned — a different rig throws a different impulse, so the number is not a constant of the game. Stone
+at 40 N·s still sits where it should: breakable by a good hit, not by a glancing one.)
 
 The kill model has the same character. It thresholds on **velocity change, not impulse**: impulse scales with
 the victim's mass, and a person body here masses well under a kilogram, so an absolute newton-second threshold
@@ -139,8 +152,29 @@ a 2-second headless settle pass (`src/gen/settle.ts`) before being accepted — 
 under its own weight beyond a (generous, joint-compliance-aware) tolerance is rejected and regenerated with a
 derived seed.
 
-`src/gen/evaluate.ts` sweeps release timing against a candidate level. Zero winning timings → reject. Over
-half the grid winning on shot one → reject as trivial. The winning fraction, inverted, is the difficulty score.
+`src/gen/evaluate.ts` sweeps release timing against a candidate level. Zero winning timings → reject. More
+than 0.30 of the grid winning on shot one → reject as trivial. The winning fraction, normalised, is the
+difficulty score.
+
+**Difficulty is normalised against a measured ceiling, on a log scale** — and both halves of that matter.
+`difficulty = 1 − winningFraction` (the first version) silently assumed a level could be won from most of the
+release grid. It cannot: sweeping 40 generated candidates, the winning fraction ran min 0.00 · p25 0.03 ·
+median 0.07 · p75 0.17 · **max 0.45**, so every shippable level scored 0.55–1.0 and nothing could ever read as
+easy. So the score normalises against the achievable ceiling (0.45) rather than against 1, and does it on a
+log scale, because the winning fraction is really a *count* of winning timings and that count is heavily
+skewed: one winning release versus two is a large difference in the precision demanded of the player, twelve
+versus thirteen is imperceptible. The measured population then maps onto a full range — 0.034 → 0.74,
+0.069 → 0.59, 0.138 → 0.39, 0.241 → 0.21, 0.45 → 0.00.
+
+The old "trivially easy" cut-off had the same flaw in the other direction: at `firstShotWinFraction > 0.5` it
+was unreachable — dead code — since the easiest of those 40 candidates cleared on 0.34 of its opening shots.
+It now sits at 0.30, the top of the range the generator actually produces, and it fired on 6 of the 107
+candidates the shipped packs were built from.
+
+The shipped packs now read: foothills 0.13 → 0.74, riverlands 0.17 → 0.74, highlands 0.17 → 0.74 (they were
+0.71–0.96 before). The top of the shipped range is 0.74 rather than 1.0 on purpose: 1.0 is "exactly one
+winning release in the whole grid", which on a 29-point grid is the last value before *unsolvable*, and a
+level that hard would not be shipped.
 
 It sweeps **only release timing**, deliberately: that is the sole control the player has at the moment of a
 shot. Counterweight mass is a level-authoring knob, not an in-game control, so sweeping it would credit the
@@ -157,7 +191,11 @@ spare round on top.
 ## Campaign & daily pipeline
 
 - **`npm run gen:campaigns`** runs the generator + validator and writes `public/campaigns/*.json` — three
-  packs, difficulty-sorted, committed so the live site never generates anything at request time.
+  packs, difficulty-sorted, committed so the live site never generates anything at request time. A pack is
+  *selected*, not just filled: the builder pools ~2× the pack size in solvable candidates and then takes 15
+  spread evenly across that pool by quantile, so level 1 is the gentlest of the pool rather than whichever
+  acceptable candidate the generator happened to emit first. Selection is a pure function of the sorted pool,
+  and candidate order comes from the pack seed, so the packs stay reproducible.
 - **Daily seed** (`src/gen/daily.ts`): the client derives a seed from the UTC date, generates one level, and
   runs an abbreviated validation sweep before showing it; on failure it increments a counter into the seed and
   retries — same mechanism the campaign builder uses, so both are provably consistent.
@@ -172,6 +210,14 @@ spare round on top.
 ever falls back to a hardcoded primitive. Every renderable body reads its texture key from its material or
 entity type (`src/render/textureKeys.ts`), never from a switch statement in the render loop. Dropping in real
 art later means replacing `atlas.svg`/`atlas.json` with the same key set — zero changes to `src/render/`.
+
+The world `Container` carries a negative y scale (physics is y-up, Pixi is y-down), and that flip mirrors the
+*artwork* as well as the coordinates — the atlas's letters rendered upside down. Each sprite therefore
+counter-flips its own y scale in `makeSprite`: the two flips cancel for the texture while the world flip still
+does its job on positions, and because `diag(1,−1)·R(θ)·diag(1,−1) = R(−θ)` the pair composes to a plain
+rotation, so nothing downstream needs a sign fixed up. Pixi's `width`/`height` setters preserve the sign of
+`scale`, so sprites resized every frame keep the counter-flip. (The ground slab's anchor moves with it, from
+y=1 to y=0, so it still hangs below the horizon.)
 
 ## Deployment / base path
 

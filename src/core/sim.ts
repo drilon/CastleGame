@@ -12,12 +12,15 @@ import { poseOf, type RenderSnapshot } from './snapshot';
  * thresholds) is tuned against this — never vary it at runtime. */
 export const FIXED_DT = 1 / 240;
 
-/** Where the machine stands. The castle grammar builds from x=0 rightward,
- * so with the castle spanning roughly 0..6m this puts it 13-19m downrange:
- * a proper siege standoff rather than point-blank, while still sitting in
- * the middle of the rig's reachable band (peak throw ~19.5m). Push it much
- * further out and most release timings fall short of the walls. */
-export const TREBUCHET_ORIGIN = { x: -13, y: 9 };
+/** Where the machine stands. The castle grammar builds from x=0 rightward
+ * (blocks span roughly -0.6..5.8m), so this puts it 10-16m downrange: a
+ * proper siege standoff rather than point-blank, while still sitting in the
+ * middle of the rig's reachable band (peak throw ~15.1m from the pivot).
+ * The standoff is not free: it is measured against the rig's reach, and the
+ * two are retuned together. Push the machine further out and most release
+ * timings fall short of the walls; pull it in and the release window's far
+ * half lands beyond the castle. */
+export const TREBUCHET_ORIGIN = { x: -10.3, y: 13 };
 
 export interface SimOptions {
   gravity?: { x: number; y: number };

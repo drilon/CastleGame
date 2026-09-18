@@ -20,9 +20,10 @@ export interface SweepConfig {
 
 export function defaultSweepConfig(maxShots: number): SweepConfig {
   const releaseDelays: number[] = [];
-  // The tuned rig swings for ~0.8s, so its usable window sits around ticks
-  // 170-220. Sample generously either side of that.
-  for (let t = 120; t <= 260; t += 6) releaseDelays.push(t);
+  // The tuned rig takes ~1.6s to come round, and its usable window — the
+  // releases that land inside the castle footprint — is ticks 332-417 on an
+  // empty field. Sample generously either side of that.
+  for (let t = 288; t <= 456; t += 6) releaseDelays.push(t);
   return {
     releaseDelays,
     // Release timing is the ONLY thing the player controls at the moment of
@@ -43,11 +44,53 @@ export interface EvaluationResult {
   /** Fraction of trials that cleared the level on the very first shot —
    * used to reject levels that are trivially easy. */
   firstShotWinFraction: number;
-  /** 0 (trivial) to 1 (hardest seen) — the inverted, normalised winning
-   * fraction. */
+  /** 0 (as easy as this generator gets) to 1 (only one winning timing in
+   * the whole grid) — see `difficultyFromWinningFraction`. */
   difficulty: number;
   solvable: boolean;
 }
+
+/**
+ * Difficulty normalisation. Measured, not assumed — the same discipline the
+ * break thresholds get.
+ *
+ * `difficulty = 1 - winningFraction` was wrong because it implicitly
+ * assumed a level could be won from most of the release grid. It cannot:
+ * sweeping 40 generated candidates, the winning fraction ran
+ *   min 0.00 · p25 0.03 · median 0.07 · p75 0.17 · p90 0.24 · max 0.45,
+ * so the naive score pinned every shippable level between 0.55 and 1.0 and
+ * nothing could ever read as easy.
+ *
+ * Two corrections, both taken from that measurement:
+ *  - Normalise against the achievable CEILING (0.45), not against 1.
+ *  - Normalise on a LOG scale, because the winning fraction is really a
+ *    count of winning timings and that count is heavily skewed: going from
+ *    one winning release to two roughly halves the timing precision the
+ *    player needs, while 12 to 13 is imperceptible. SCALE is one winning
+ *    timing on the default 29-point grid, i.e. the resolution floor.
+ *
+ * Together these map the measured population onto a genuinely full range:
+ * 0.034 -> 0.74, 0.069 -> 0.59, 0.138 -> 0.39, 0.241 -> 0.21, 0.45 -> 0.0.
+ */
+export const WINNING_FRACTION_CEILING = 0.45;
+const WINNING_FRACTION_SCALE = 0.035;
+
+export function difficultyFromWinningFraction(winningFraction: number): number {
+  const wf = Math.max(0, winningFraction);
+  const normalised =
+    Math.log1p(wf / WINNING_FRACTION_SCALE) /
+    Math.log1p(WINNING_FRACTION_CEILING / WINNING_FRACTION_SCALE);
+  return Math.min(1, Math.max(0, 1 - normalised));
+}
+
+/**
+ * A level this many of its opening shots can clear outright is not a level.
+ * The old threshold was 0.5, which the measurement above shows is
+ * unreachable (the easiest of 40 candidates cleared on 0.34 of its opening
+ * shots) — i.e. it was dead code. 0.30 sits at the top of the range the
+ * generator actually produces and fires on roughly one candidate in forty.
+ */
+export const TRIVIAL_FIRST_SHOT_FRACTION = 0.3;
 
 interface Shot {
   releaseDelayTicks: number;
@@ -113,9 +156,9 @@ function runSequence(RAPIER: RapierModule, level: Level, seq: Shot[], cfg: Sweep
  * floors generally cannot be cleared by firing the same shot twice — the
  * second shot has to go somewhere else.
  *
- * The winning fraction over opening shots is inverted into the difficulty
- * score, so difficulty still reads as "how much of the parameter space
- * wins", not "did the beam get lucky".
+ * The winning fraction over opening shots is normalised into the difficulty
+ * score (see `difficultyFromWinningFraction`), so difficulty still reads as
+ * "how much of the parameter space wins", not "did the beam get lucky".
  */
 export function evaluateLevel(RAPIER: RapierModule, level: Level, sweep?: Partial<SweepConfig>): EvaluationResult {
   const cfg = { ...defaultSweepConfig(level.ammo), ...sweep };
@@ -164,7 +207,7 @@ export function evaluateLevel(RAPIER: RapierModule, level: Level, sweep?: Partia
     wins,
     winningFraction,
     firstShotWinFraction: firstShotWins / trials,
-    difficulty: Math.min(1, Math.max(0, 1 - winningFraction)),
+    difficulty: difficultyFromWinningFraction(winningFraction),
     solvable: wins > 0,
   };
 }

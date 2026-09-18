@@ -29,16 +29,20 @@ async function main() {
   for (const { id, theme, seed } of PACKS) {
     process.stdout.write(`Generating pack "${id}" (${theme})...\n`);
     const t0 = Date.now();
-    const { pack, candidatesTried } = buildCampaignPack(RAPIER, id, theme, seed, {
+    const { pack, candidatesTried, poolDifficulties, rejectedTrivial, rejectedUnsolvable } = buildCampaignPack(RAPIER, id, theme, seed, {
       levelCount: 15,
       maxCandidates: 600,
       onProgress: (tried, found) => {
-        if (tried % 20 === 0) process.stdout.write(`  ...${tried} candidates tried, ${found}/15 found\n`);
+        if (tried % 20 === 0) process.stdout.write(`  ...${tried} candidates tried, ${found} in pool\n`);
       },
     });
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     process.stdout.write(
-      `  ${pack.levels.length}/15 levels from ${candidatesTried} candidates in ${elapsed}s\n`,
+      `  ${pack.levels.length}/15 levels from ${candidatesTried} candidates ` +
+        `(pool ${poolDifficulties.length}, rejected ${rejectedUnsolvable} unsolvable / ${rejectedTrivial} trivial) in ${elapsed}s\n`,
+    );
+    process.stdout.write(
+      `  difficulty: ${pack.levels.map((l) => l.difficulty.toFixed(2)).join(' ')}\n`,
     );
     if (pack.levels.length < 15) {
       throw new Error(

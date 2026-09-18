@@ -13,10 +13,12 @@ beforeAll(async () => {
 /** Runs a fixed scenario to a fixed tick count and returns a JSON-serialisable
  * fingerprint of every body's final pose. */
 function runScenario(): string {
-  const sim = new Sim(RAPIER, simpleStackLevel(), { maxTicks: 240 * 12 });
+  const sim = new Sim(RAPIER, simpleStackLevel(), { maxTicks: 240 * 14 });
   const dropTick = 30;
-  const releaseTick = 230;
-  for (let i = 0; i < 700; i++) {
+  // 350 ticks of swing after the drop puts the payload into the fixture's
+  // stack — inside the rig's release window (ticks 332-417).
+  const releaseTick = dropTick + 350;
+  for (let i = 0; i < 1000; i++) {
     if (sim.tick === dropTick) sim.dropCounterweight();
     if (sim.tick === releaseTick) sim.releaseSling();
     sim.step();

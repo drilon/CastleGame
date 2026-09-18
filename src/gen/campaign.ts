@@ -1,7 +1,7 @@
 import type { RapierModule } from '../core/rapier-init';
 import type { Archetype, Level } from '../core/types';
 import { generateLevel } from './generate';
-import { evaluateLevel } from './evaluate';
+import { evaluateLevel, TRIVIAL_FIRST_SHOT_FRACTION } from './evaluate';
 import { pick, rngFromSeed } from '../core/rng';
 import { ARCHETYPE_LIST } from './archetypes';
 
@@ -25,6 +25,11 @@ export interface BuildPackOptions {
 export interface BuildPackResult {
   pack: CampaignPack;
   candidatesTried: number;
+  /** Every solvable candidate's difficulty, in the order found — the pool
+   * the shipped 15 were drawn from. Reported by `gen-campaigns`. */
+  poolDifficulties: number[];
+  rejectedTrivial: number;
+  rejectedUnsolvable: number;
 }
 
 /**
@@ -33,6 +38,16 @@ export interface BuildPackResult {
  * then swept by the validator; only solvable, non-trivial candidates are
  * kept. This is the same pipeline `tools/gen-campaigns.ts` runs at build
  * time and the daily seed runs (abbreviated) at runtime — see `daily.ts`.
+ *
+ * Candidates are pooled rather than taken first-come. Keeping the first
+ * `levelCount` acceptable candidates ships whatever difficulties the
+ * generator happened to emit first, which is why earlier packs opened on
+ * levels as hard as their finale. Instead this gathers a pool of about
+ * twice the pack size (bounded by `maxCandidates`) and takes an even
+ * spread across it by quantile, so level 1 really is the gentlest of the
+ * pool and level 15 the hardest. It stays deterministic from the pack
+ * seed: candidate order comes from `packRng`, and the selection is a pure
+ * function of the sorted pool.
  */
 export function buildCampaignPack(
   RAPIER: RapierModule,
@@ -47,9 +62,12 @@ export function buildCampaignPack(
 
   const packRng = rngFromSeed(seed);
   const scored: { level: Level; difficulty: number }[] = [];
+  const poolTarget = Math.max(levelCount, Math.min(maxCandidates, levelCount * 2));
   let candidatesTried = 0;
+  let rejectedTrivial = 0;
+  let rejectedUnsolvable = 0;
 
-  for (let i = 0; candidatesTried < maxCandidates && scored.length < levelCount; i++) {
+  for (let i = 0; candidatesTried < maxCandidates && scored.length < poolTarget; i++) {
     candidatesTried++;
     options.onProgress?.(candidatesTried, scored.length);
     const candidateSeed = `${seed}:${i}`;
@@ -61,15 +79,48 @@ export function buildCampaignPack(
       continue;
     }
     const evaluation = evaluateLevel(RAPIER, level);
-    if (!evaluation.solvable) continue;
-    if (evaluation.firstShotWinFraction > 0.5) continue; // trivially easy
+    if (!evaluation.solvable) {
+      rejectedUnsolvable++;
+      continue;
+    }
+    if (evaluation.firstShotWinFraction > TRIVIAL_FIRST_SHOT_FRACTION) {
+      rejectedTrivial++;
+      continue;
+    }
     level.difficulty = evaluation.difficulty;
     level.par = Math.max(1, Math.round(evaluation.difficulty * ammo));
     scored.push({ level, difficulty: evaluation.difficulty });
   }
 
   scored.sort((a, b) => a.difficulty - b.difficulty);
-  const levels = scored.map((s, i) => ({ ...s.level, id: `${packId}-${i}` }));
+  const chosen = quantileSpread(scored, levelCount);
+  const levels = chosen.map((s, i) => ({ ...s.level, id: `${packId}-${i}` }));
 
-  return { pack: { id: packId, theme, levels }, candidatesTried };
+  return {
+    pack: { id: packId, theme, levels },
+    candidatesTried,
+    poolDifficulties: scored.map((s) => s.difficulty),
+    rejectedTrivial,
+    rejectedUnsolvable,
+  };
+}
+
+/**
+ * Picks `count` items evenly spaced through an already-sorted pool: the
+ * easiest, the hardest, and evenly spaced quantiles between. Deterministic,
+ * and never returns the same pool entry twice (it walks forward instead).
+ */
+function quantileSpread<T>(sorted: T[], count: number): T[] {
+  if (sorted.length <= count) return sorted.slice();
+  const out: T[] = [];
+  let last = -1;
+  for (let i = 0; i < count; i++) {
+    const target = Math.round((i * (sorted.length - 1)) / (count - 1));
+    const index = Math.max(target, last + 1);
+    // Never run off the end: leave room for the picks still to come.
+    const clamped = Math.min(index, sorted.length - (count - i));
+    out.push(sorted[clamped]!);
+    last = clamped;
+  }
+  return out;
 }

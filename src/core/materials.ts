@@ -12,10 +12,11 @@ export interface MaterialDef {
    * two thresholds governs (the weaker material fails first).
    *
    * These are calibrated against the impulse scale this simulation
-   * actually produces, measured rather than assumed:
-   *   - a healthy structure settling peaks around  1 N*s
+   * actually produces, measured rather than assumed (re-measured after the
+   * trebuchet retune, across six shipped levels x five release timings):
+   *   - a healthy structure settling peaks around 0.8 N*s
    *   - masonry falling a few metres lands at     ~27 N*s
-   *   - a direct projectile strike delivers    64-91 N*s
+   *   - a direct projectile strike delivers    20-64 N*s
    * Anything much above that top figure is unbreakable in practice, which
    * is what made earlier castles topple as one welded mass instead of
    * failing locally. Keep new values inside this band.

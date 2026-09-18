@@ -49,6 +49,8 @@ export function buildDailyLevel(RAPIER: RapierModule, date: Date, maxAttempts = 
 
 function abbreviatedDelays(): number[] {
   const out: number[] = [];
-  for (let t = 120; t <= 260; t += 10) out.push(t);
+  // Same band as the full sweep (`defaultSweepConfig`), sampled coarsely:
+  // the rig's usable release window is ticks 332-417.
+  for (let t = 288; t <= 458; t += 10) out.push(t);
   return out;
 }

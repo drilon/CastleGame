@@ -49,31 +49,41 @@ export interface TrebuchetConfig {
 
 /**
  * Tuned by sweeping release timing and measuring throw distance from the
- * machine (see git history for the harness). Measured curve:
+ * machine (see git history for the harness). Measured curve, castle
+ * spanning x=-0.6..5.8 with the machine at x=-10.3:
  *
- *   tick  176  184  192  196  204  212  216
- *   dist   10m  19m  23m  23m  20m  15m  13m
+ *   tick   332  344  356  368  376  388  400  412  417
+ *   imp x  0.1  1.7  3.4  4.6  4.8  4.3  2.8  0.9  0.1
+ *
+ * That is an 86-tick (358 ms) window landing inside the castle footprint,
+ * monotonic either side of the peak, at 0.17 m per tick at its steepest.
  *
  * Three properties matter and are easy to lose when retuning:
- *  - SLOW: the beam takes ~0.8s to come round, so the swing is readable.
- *    A near-weightless beam whip-cracks in 0.25s and feels broken.
- *  - GENTLE GRADIENT: ~0.5m per tick near the peak, so small timing errors
- *    cost metres, not tens of metres.
+ *  - SLOW: the beam takes ~1.6s to come round to peak range, so the swing
+ *    is readable. A near-weightless beam whip-cracks in 0.25s and feels
+ *    broken. Slowness is also what buys the wide release window: the
+ *    landing point's curvature against release *time* falls roughly as the
+ *    square of the angular rate, so halving the rate quadruples the window.
+ *  - GENTLE GRADIENT: ~0.17m per tick at the window's steepest, so small
+ *    timing errors cost decimetres, not tens of metres.
  *  - MONOTONIC either side of the peak, so "early" reliably means "short".
  *
- * The beam is deliberately heavy relative to the counterweight (1000 vs
- * 2500) — roughly a real trebuchet's proportions, and the reason the swing
- * is stately rather than violent.
+ * The beam is deliberately heavy relative to the counterweight (1300 vs
+ * 4000) — roughly a real trebuchet's proportions, and the reason the swing
+ * is stately rather than violent. It cannot go much heavier than this: the
+ * beam's own centre of mass sits forward of the pivot when cocked, and once
+ * armMass * (longArm - shortArm)/2 exceeds counterweightMass * shortArm the
+ * machine simply rocks in place instead of coming round.
  */
 export const DEFAULT_TREBUCHET_CONFIG: Omit<TrebuchetConfig, 'x' | 'y'> = {
-  counterweightMass: 2500,
-  armMass: 1000,
-  armRatio: 4.5,
-  armLength: 10,
-  slingLength: 4.5,
+  counterweightMass: 4000,
+  armMass: 1300,
+  armRatio: 6,
+  armLength: 13,
+  slingLength: 3.25,
   slingSegments: 1,
   payloadRadius: 0.45,
-  payloadMass: 60,
+  payloadMass: 90,
 };
 /** A single input event applied to the simulation, timestamped in physics ticks. */
 export type SimInput =
